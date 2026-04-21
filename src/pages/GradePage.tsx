@@ -1,203 +1,155 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  GradeRecord,
+  SUBJECT_MAP,
+  average,
+  loadGrades,
+  makeId,
+  saveGrades,
+} from "../utils/onpaceStorage";
 
-type ExamType = "중간고사" | "기말고사";
+type Area = "국어" | "수학" | "영어" | "사회" | "과학";
 
-type GradeRecord = {
-  id: string;
-  year: number;
-  semester: 1 | 2;
-  examType: ExamType;
-  korean: number;
-  math: number;
-  english: number;
-  science: number;
-  social: number;
-};
-
-const defaultInput = {
-  year: 1,
-  semester: 1,
-  examType: "중간고사" as ExamType,
-  korean: 3,
-  math: 3,
-  english: 3,
-  science: 3,
-  social: 3,
+const initialInput = {
+  year: 1 as 1 | 2 | 3,
+  semester: 1 as 1 | 2,
+  examType: "중간고사" as "중간고사" | "기말고사",
+  area: "국어" as Area,
+  subject: "국어",
+  score: 3,
 };
 
 export default function GradePage() {
   const [records, setRecords] = useState<GradeRecord[]>([]);
-  const [input, setInput] = useState(defaultInput);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [input, setInput] = useState(initialInput);
 
-  // 초기 로딩
   useEffect(() => {
-    const saved = localStorage.getItem("gradeData");
-    if (saved) {
-      setRecords(JSON.parse(saved));
-    }
+    setRecords(loadGrades());
   }, []);
 
-  // 평균 계산
-  const avg = (arr: number[]) =>
-    Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10;
+  const currentSubjects = SUBJECT_MAP[input.area];
 
-  const overallAvg = useMemo(() => {
-    if (records.length === 0) return 0;
-    const all = records.map((r) =>
-      avg([r.korean, r.math, r.english, r.science, r.social])
-    );
-    return avg(all);
-  }, [records]);
-
-  const handleChange = (key: string, value: number | string) => {
-    setInput((prev: any) => ({ ...prev, [key]: value }));
-  };
-
-  const saveRecord = () => {
-    const newRecord: GradeRecord = {
-      id: editingId || Date.now().toString(),
-      ...input,
+  const handleSave = () => {
+    const record: GradeRecord = {
+      id: editingId || makeId(),
+      year: input.year,
+      semester: input.semester,
+      examType: input.examType,
+      area: input.area,
+      subject: input.subject,
+      score: Number(input.score),
+      savedAt: new Date().toISOString(),
     };
 
     const next = editingId
-      ? records.map((r) => (r.id === editingId ? newRecord : r))
-      : [...records, newRecord];
+      ? records.map((r) => (r.id === editingId ? record : r))
+      : [...records, record];
 
     setRecords(next);
-    localStorage.setItem("gradeData", JSON.stringify(next));
+    saveGrades(next);
     setEditingId(null);
-    setInput(defaultInput);
+    setInput(initialInput);
   };
 
-  const editRecord = (r: GradeRecord) => {
-    setEditingId(r.id);
-    setInput(r);
+  const handleEdit = (record: GradeRecord) => {
+    setEditingId(record.id);
+    setInput({
+      year: record.year,
+      semester: record.semester,
+      examType: record.examType,
+      area: record.area,
+      subject: record.subject,
+      score: record.score,
+    });
   };
 
-  const deleteRecord = (id: string) => {
+  const handleDelete = (id: string) => {
     const next = records.filter((r) => r.id !== id);
     setRecords(next);
-    localStorage.setItem("gradeData", JSON.stringify(next));
+    saveGrades(next);
   };
 
-  return (
-    <div style={{ padding: 20 }}>
-      <h2>📊 성적 관리</h2>
+  const overallAverage = useMemo(() => {
+    if (!records.length) return 0;
+    return average(records.map((r) => r.score));
+  }, [records]);
 
-      {/* 입력 */}
-      <div style={{ marginBottom: 20 }}>
-        <select
-          value={input.year}
-          onChange={(e) => handleChange("year", Number(e.target.value))}
-        >
+  return (
+    <div>
+      <h3>📊 성적 입력</h3>
+
+      <div style={{ display: "grid", gap: 12, marginBottom: 18 }}>
+        <select value={input.year} onChange={(e) => setInput({ ...input, year: Number(e.target.value) as 1 | 2 | 3 })}>
           <option value={1}>1학년</option>
           <option value={2}>2학년</option>
           <option value={3}>3학년</option>
         </select>
 
-        <select
-          value={input.semester}
-          onChange={(e) => handleChange("semester", Number(e.target.value))}
-        >
+        <select value={input.semester} onChange={(e) => setInput({ ...input, semester: Number(e.target.value) as 1 | 2 })}>
           <option value={1}>1학기</option>
           <option value={2}>2학기</option>
         </select>
 
-        <select
-          value={input.examType}
-          onChange={(e) => handleChange("examType", e.target.value)}
-        >
+        <select value={input.examType} onChange={(e) => setInput({ ...input, examType: e.target.value as "중간고사" | "기말고사" })}>
           <option value="중간고사">중간고사</option>
           <option value="기말고사">기말고사</option>
         </select>
 
-        <div>
-          국어{" "}
-          <input
-            type="number"
-            value={input.korean}
-            onChange={(e) =>
-              handleChange("korean", Number(e.target.value))
-            }
-          />
-          수학{" "}
-          <input
-            type="number"
-            value={input.math}
-            onChange={(e) =>
-              handleChange("math", Number(e.target.value))
-            }
-          />
-          영어{" "}
-          <input
-            type="number"
-            value={input.english}
-            onChange={(e) =>
-              handleChange("english", Number(e.target.value))
-            }
-          />
-          과학{" "}
-          <input
-            type="number"
-            value={input.science}
-            onChange={(e) =>
-              handleChange("science", Number(e.target.value))
-            }
-          />
-          사회{" "}
-          <input
-            type="number"
-            value={input.social}
-            onChange={(e) =>
-              handleChange("social", Number(e.target.value))
-            }
-          />
-        </div>
+        <select
+          value={input.area}
+          onChange={(e) => {
+            const area = e.target.value as Area;
+            setInput({
+              ...input,
+              area,
+              subject: SUBJECT_MAP[area][0],
+            });
+          }}
+        >
+          <option value="국어">국어</option>
+          <option value="수학">수학</option>
+          <option value="영어">영어</option>
+          <option value="사회">사회</option>
+          <option value="과학">과학</option>
+        </select>
 
-        <button onClick={saveRecord}>
-          {editingId ? "수정 저장" : "저장"}
-        </button>
+        <select value={input.subject} onChange={(e) => setInput({ ...input, subject: e.target.value })}>
+          {currentSubjects.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+
+        <input
+          type="number"
+          placeholder="등급 입력"
+          value={input.score}
+          onChange={(e) => setInput({ ...input, score: Number(e.target.value) })}
+        />
+
+        <button onClick={handleSave}>{editingId ? "수정 저장" : "저장"}</button>
       </div>
 
-      {/* 평균 */}
-      <h3>내신 평균: {overallAvg || "-"}</h3>
+      <div style={{ marginBottom: 16, fontWeight: 800 }}>내신 평균: {overallAverage || "-"}</div>
 
-      {/* 목록 */}
-      <table border={1} style={{ marginTop: 20 }}>
-        <thead>
-          <tr>
-            <th>학년</th>
-            <th>학기</th>
-            <th>고사</th>
-            <th>국어</th>
-            <th>수학</th>
-            <th>영어</th>
-            <th>과학</th>
-            <th>사회</th>
-            <th>관리</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {records.map((r) => (
-            <tr key={r.id}>
-              <td>{r.year}</td>
-              <td>{r.semester}</td>
-              <td>{r.examType}</td>
-              <td>{r.korean}</td>
-              <td>{r.math}</td>
-              <td>{r.english}</td>
-              <td>{r.science}</td>
-              <td>{r.social}</td>
-              <td>
-                <button onClick={() => editRecord(r)}>수정</button>
-                <button onClick={() => deleteRecord(r.id)}>삭제</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div style={{ display: "grid", gap: 12 }}>
+        {records.map((r) => (
+          <div key={r.id} style={{ padding: 14, borderRadius: 14, border: "1px solid #dbe2ea", background: "#fff" }}>
+            <div>
+              {r.year}학년 {r.semester}학기 / {r.examType}
+            </div>
+            <div>
+              {r.area} · {r.subject} · {r.score}등급
+            </div>
+            <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+              <button onClick={() => handleEdit(r)}>수정</button>
+              <button onClick={() => handleDelete(r.id)}>삭제</button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
